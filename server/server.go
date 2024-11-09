@@ -1,4 +1,4 @@
-package networking
+package server
 
 import (
 	"io"
@@ -7,22 +7,22 @@ import (
 	"time"
 )
 
-func NetworkConnection() {
-	listener, err := net.Listen("tcp", "localhost:1337")
+func ListenAndServe() {
+	listener, err := net.Listen("tcp", "localhost:8000")
 	if err != nil {
 		log.Fatal(err)
 	}
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Print(err)
+			log.Print(err) // e.g., connection aborted
 			continue
 		}
-		go HandleConn(conn)
+		handleConn(conn) // handle one connection at a time
 	}
 }
 
-func HandleConn(c net.Conn) {
+func handleConn(c net.Conn) {
 	defer c.Close()
 	for {
 		_, err := io.WriteString(c, time.Now().Format("15:04:05\n"))
