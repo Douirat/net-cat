@@ -1,7 +1,9 @@
 package server
 
 import (
-	"io"
+	// "io"
+	"bufio"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -9,7 +11,8 @@ import (
 
 // Declare a structure to represent a client:
 type Client struct {
-	Name string
+	Connection net.Conn
+	Name       string
 }
 
 // Declare a structure to represent a message:
@@ -45,10 +48,50 @@ func ListenAndServe() {
 			continue
 		}
 		ServerInst := new(Server)
-		handleConn(conn,  ServerInst) // handle one connection at a time
+		go handleConnection(conn, ServerInst) // handle one connection at a time
 	}
 }
 
-func handleConn(c net.Conn, server *Server) {
-	defer c.Close()
+func handleConnection(conn net.Conn, server *Server) {
+	defer conn.Close()
+	client := &Client{}
+	client.Connection = conn
+	server.Clients = append(server.Clients, client)
+	// Read data from the client
+	reader := bufio.NewReader(conn)
+	for {
+		if client.Name == "" {
+			_, err := conn.Write([]byte("[ENTER YOUR NAME]:"))
+			if err != nil {
+				fmt.Println("Error sending response:", err)
+				return
+			}
+		}
+		res, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Connection closed by client")
+			return
+		}
+		if client.Name == "" && res != "" {
+			client.Name = res
+		} else {
+			message := &Message{}
+			message.Time = time.Now()
+			// Format("2006-01-02 15:04:05")
+			message.CilentName = client.Name
+			message.Content = res
+			_, err = conn.Write([]byte(""\n"))
+			if err != nil {
+				fmt.Println("Error sending response:", err)
+				return
+			}
+			fmt.Printf("Message received: %s", res)
+		}
+		// Respond to the client
+		_, err = conn.Write([]byte("Message received\n"))
+		if err != nil {
+			fmt.Println("Error sending response:", err)
+			return
+		}
+	}
 }
