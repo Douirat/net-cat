@@ -17,15 +17,15 @@ type Client struct {
 
 // Declare a structure to represent a message:
 type Message struct {
-	Time       time.Time
+	Time       string
 	CilentName string
 	Content    string
 }
 
 // Declare a structure to represent a server:
 type Server struct {
-	Clients []*Client
-	Message []*Message
+	Clients  []*Client
+	Messages []*Message
 }
 
 // Instantiate  a new server:
@@ -56,42 +56,69 @@ func handleConnection(conn net.Conn, server *Server) {
 	defer conn.Close()
 	client := &Client{}
 	client.Connection = conn
+	if len(server.Clients) == 10 {
+		server.HandleResponse(client.Connection, "The chat box is full!\n")
+	}
 	server.Clients = append(server.Clients, client)
 	// Read data from the client
 	reader := bufio.NewReader(conn)
 	for {
 		if client.Name == "" {
-			_, err := conn.Write([]byte("[ENTER YOUR NAME]:"))
-			if err != nil {
-				fmt.Println("Error sending response:", err)
-				return
-			}
+			server.HandleResponse(client.Connection, "[ENTER YOUR NAME]:")
 		}
 		res, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("Connection closed by client")
+			for _, v := range server.Clients {
+				if v.Connection != client.Connection {
+					server.HandleResponse(v.Connection, client.Name[:len(client.Name)-1]+" has left our chat...\n")
+				}
+			}
 			return
 		}
 		if client.Name == "" && res != "" {
 			client.Name = res
-		} else {
-			message := &Message{}
-			message.Time = time.Now()
-			// Format("2006-01-02 15:04:05")
-			message.CilentName = client.Name
-			message.Content = res
-			_, err = conn.Write([]byte(""\n"))
-			if err != nil {
-				fmt.Println("Error sending response:", err)
-				return
+			for _, v := range server.Clients {
+				if v.Connection != client.Connection {
+					server.HandleResponse(v.Connection, client.Name[:len(client.Name)-1]+" has joined our chat...\n")
+				}
 			}
-			fmt.Printf("Message received: %s", res)
+		} else {
+			if res != "" {
+				message := &Message{}
+				message.Time = time.Now().Format("2006-01-02 15:04:05")
+				message.CilentName = client.Name
+				message.Content = res
+				server.Messages = append(server.Messages, message)
+				server.Broadcast(client.Connection)
+			} else {
+			}
+			// Respond to the client
+			server.HandleResponse(client.Connection, "Message received\n")
 		}
-		// Respond to the client
-		_, err = conn.Write([]byte("Message received\n"))
-		if err != nil {
-			fmt.Println("Error sending response:", err)
-			return
+	}
+}
+
+// Helper function to broadcast to the network:
+func (server *Server) Broadcast(con net.Conn) {
+	for _, client := range server.Clients {
+		if client.Connection != con {
+			for _, message := range server.Messages {
+				response := "[" + message.Time + "]" + "[" + message.CilentName + "]: " + message.Content
+				_, err := con.Write([]byte(response))
+				if err != nil {
+					fmt.Println("Error sending response:", err)
+					return
+				}
+			}
 		}
+	}
+}
+
+// Helper function to broadcast error messages:
+func (server *Server) HandleResponse(con net.Conn, str string) {
+	_, err := con.Write([]byte(str))
+	if err != nil {
+		fmt.Println("Error sending response:", err)
+		return
 	}
 }
